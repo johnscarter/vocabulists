@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FHIR Resource Diff Tool</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #f4f2ee;
+    --surface: #ffffff;
+    --border: #d6d0c4;
+    --text: #1a1814;
+    --text-muted: #7a7268;
+    --accent: #1a5c96;
+    --accent-light: #e8f0f8;
+    --added: #1a6b3a;
+    --added-bg: #eaf5ee;
+    --deleted: #9b2020;
+    --deleted-bg: #fdf0f0;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 40px 24px;
+  }
+
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  header {
+    margin-bottom: 40px;
+    border-bottom: 2px solid var(--text);
+    padding-bottom: 20px;
+  }
+
+  header h1 {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+  }
+
+  header p {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-top: 6px;
+    font-weight: 300;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 28px;
+    margin-bottom: 20px;
+  }
+
+  .card h2 {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+  }
+
+  .file-row {
+    display: grid;
+    grid-template-columns: 60px 1fr;
+    gap: 16px;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .file-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .file-drop {
+    border: 1.5px dashed var(--border);
+    padding: 16px 20px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--bg);
+  }
+
+  .file-drop:hover, .file-drop.dragover {
+    border-color: var(--accent);
+    background: var(--accent-light);
+  }
+
+  .file-drop.loaded {
+    border-color: var(--added);
+    border-style: solid;
+    background: var(--added-bg);
+  }
+
+  .file-drop input[type="file"] {
+    display: none;
+  }
+
+  .file-drop-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .file-drop-text {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .file-drop.loaded .file-drop-text {
+    color: var(--added);
+    font-weight: 500;
+  }
+
+  .file-name {
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  button.run {
+    width: 100%;
+    padding: 14px;
+    background: var(--text);
+    color: #fff;
+    border: none;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: background 0.15s;
+    margin-top: 4px;
+  }
+
+  button.run:hover:not(:disabled) {
+    background: var(--accent);
+  }
+
+  button.run:disabled {
+    background: var(--border);
+    color: var(--text-muted);
+    cursor: not-allowed;
+  }
+
+  .results {
+    display: none;
+  }
+
+  .results.visible {
+    display: block;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 16px 20px;
+    text-align: center;
+  }
+
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 600;
+    display: block;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-top: 4px;
+    display: block;
+  }
+
+  .stat.added .stat-value { color: var(--added); }
+  .stat.deleted .stat-value { color: var(--deleted); }
+
+  .downloads {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+  }
+
+  .dl-btn {
+    display: block;
+    padding: 12px 16px;
+    border: 1.5px solid var(--border);
+    text-decoration: none;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    background: var(--surface);
+    text-align: center;
+    transition: all 0.15s;
+    cursor: pointer;
+  }
+
+  .dl-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-light);
+  }
+
+  .dl-btn .dl-icon { font-size: 16px; display: block; margin-bottom: 6px; }
+  .dl-btn .dl-sub { font-size: 10px; font-weight: 400; color: var(--text-muted); margin-top: 4px; display: block; }
+
+  .error {
+    background: var(--deleted-bg);
+    border: 1px solid #f0c0c0;
+    padding: 14px 18px;
+    font-size: 13px;
+    color: var(--deleted);
+    font-family: var(--mono);
+    margin-bottom: 20px;
+    display: none;
+  }
+
+  .resource-type {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    margin-left: 10px;
+    vertical-align: middle;
+  }
+  .resource-type.codesystem { background: var(--accent-light); color: var(--accent); }
+  .resource-type.valueset { background: #f0eaf8; color: #6a3a96; }
+  .resource-type.unknown { background: var(--deleted-bg); color: var(--deleted); }
+
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>fhir_diff</h1>
+    <p>Compare two FHIR CodeSystem or ValueSet JSON exports and generate CSV listings</p>
+  </header>
+
+  <div class="card">
+    <h2>Input Files</h2>
+
+    <div class="file-row">
+      <span class="file-label">OLD</span>
+      <div class="file-drop" id="drop-old" onclick="document.getElementById('input-old').click()">
+        <input type="file" id="input-old" accept=".json">
+        <span class="file-drop-icon">📂</span>
+        <span class="file-drop-text" id="label-old">Click or drag to load the older version JSON file</span>
+        <span class="resource-type" id="type-old" style="display:none"></span>
+      </div>
+    </div>
+
+    <div class="file-row">
+      <span class="file-label">NEW</span>
+      <div class="file-drop" id="drop-new" onclick="document.getElementById('input-new').click()">
+        <input type="file" id="input-new" accept=".json">
+        <span class="file-drop-icon">📂</span>
+        <span class="file-drop-text" id="label-new">Click or drag to load the newer version JSON file</span>
+        <span class="resource-type" id="type-new" style="display:none"></span>
+      </div>
+    </div>
+
+    <button class="run" id="run-btn" disabled onclick="runDiff()">RUN COMPARISON</button>
+  </div>
+
+  <div class="error" id="error-box"></div>
+
+  <div class="results" id="results">
+    <div class="card">
+      <h2>Results</h2>
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-value" id="stat-old">—</span>
+          <span class="stat-label">Concepts (OLD)</span>
+        </div>
+        <div class="stat added">
+          <span class="stat-value" id="stat-added">—</span>
+          <span class="stat-label">Added</span>
+        </div>
+        <div class="stat deleted">
+          <span class="stat-value" id="stat-deleted">—</span>
+          <span class="stat-label">Deleted</span>
+        </div>
+      </div>
+      <div class="downloads">
+        <a class="dl-btn" id="dl-old">
+          <span class="dl-icon">⬇</span>
+          <span id="dl-old-name">OLD.csv</span>
+          <span class="dl-sub">Full listing</span>
+        </a>
+        <a class="dl-btn" id="dl-new">
+          <span class="dl-icon">⬇</span>
+          <span id="dl-new-name">NEW.csv</span>
+          <span class="dl-sub">Full listing</span>
+        </a>
+        <a class="dl-btn" id="dl-diff">
+          <span class="dl-icon">⬇</span>
+          <span id="dl-diff-name">DIFF.csv</span>
+          <span class="dl-sub">Added &amp; deleted</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  let oldFile = null, newFile = null;
+  let oldParsed = null, newParsed = null;
+
+  function setupDrop(dropId, inputId, labelId, typeId, which) {
+    const drop = document.getElementById(dropId);
+    const input = document.getElementById(inputId);
+
+    input.addEventListener('change', () => {
+      if (input.files[0]) loadFile(which, input.files[0], drop, labelId, typeId);
+    });
+
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragover'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+    drop.addEventListener('drop', e => {
+      e.preventDefault();
+      drop.classList.remove('dragover');
+      if (e.dataTransfer.files[0]) loadFile(which, e.dataTransfer.files[0], drop, labelId, typeId);
+    });
+  }
+
+  function loadFile(which, file, drop, labelId, typeId) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      let data;
+      try { data = JSON.parse(e.target.result); }
+      catch { showError('Could not parse ' + file.name + ' as JSON.'); return; }
+
+      if (which === 'old') { oldFile = file; oldParsed = data; }
+      else { newFile = file; newParsed = data; }
+
+      drop.classList.add('loaded');
+      document.getElementById(labelId).textContent = file.name;
+
+      const badge = document.getElementById(typeId);
+      const rt = detectResourceType(data);
+      badge.textContent = rt === 'CodeSystem' ? 'CodeSystem' : rt === 'ValueSet' ? 'ValueSet' : 'Unknown';
+      badge.className = 'resource-type ' + (rt === 'CodeSystem' ? 'codesystem' : rt === 'ValueSet' ? 'valueset' : 'unknown');
+      badge.style.display = 'inline-block';
+
+      checkReady();
+    };
+    reader.onerror = () => showError('Could not read ' + file.name);
+    reader.readAsText(file);
+  }
+
+  function detectResourceType(data) {
+    if (data.resourceType === 'CodeSystem') return 'CodeSystem';
+    if (data.resourceType === 'ValueSet') return 'ValueSet';
+    // Fallback: infer from structure
+    if (data.concept) return 'CodeSystem';
+    if (data.compose) return 'ValueSet';
+    return 'Unknown';
+  }
+
+  function extractConcepts(data) {
+    const rt = detectResourceType(data);
+    const concepts = {}; // key: "system|code" for ValueSet, "code" for CodeSystem
+
+    if (rt === 'CodeSystem') {
+      (data.concept || []).forEach(c => {
+        concepts[c.code] = { code: c.code, display: c.display || '', system: '' };
+      });
+    } else if (rt === 'ValueSet') {
+      const includes = (data.compose && data.compose.include) || [];
+      includes.forEach(inc => {
+        const system = inc.system || '';
+        (inc.concept || []).forEach(c => {
+          const key = system ? system + '|' + c.code : c.code;
+          concepts[key] = { code: c.code, display: c.display || '', system: system };
+        });
+      });
+    }
+    return { concepts, resourceType: rt };
+  }
+
+  function checkReady() {
+    document.getElementById('run-btn').disabled = !(oldFile && newFile);
+  }
+
+  function toCsv(rows) {
+    return rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\r\n');
+  }
+
+  function makeDownload(csvText) {
+    const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+    return URL.createObjectURL(blob);
+  }
+
+  function baseName(file) {
+    return file.name.replace(/\.json$/i, '');
+  }
+
+  function showError(msg) {
+    const box = document.getElementById('error-box');
+    box.textContent = msg;
+    box.classList.add('visible');
+  }
+
+  function hideError() {
+    document.getElementById('error-box').classList.remove('visible');
+  }
+
+  function runDiff() {
+    hideError();
+    document.getElementById('results').classList.remove('visible');
+
+    const { concepts: oldConcepts, resourceType: oldType } = extractConcepts(oldParsed);
+    const { concepts: newConcepts, resourceType: newType } = extractConcepts(newParsed);
+
+    if (oldType === 'Unknown' || newType === 'Unknown') {
+      showError('One or both files could not be identified as a CodeSystem or ValueSet. Check that the files are valid FHIR JSON exports.');
+      return;
+    }
+
+    if (oldType !== newType) {
+      showError('Files are different resource types (' + oldType + ' vs ' + newType + '). Both files must be the same type.');
+      return;
+    }
+
+    const isValueSet = oldType === 'ValueSet';
+
+    const addedKeys = Object.keys(newConcepts).filter(k => !oldConcepts.hasOwnProperty(k)).sort();
+    const deletedKeys = Object.keys(oldConcepts).filter(k => !newConcepts.hasOwnProperty(k)).sort();
+
+    // Build CSV rows
+    const header = isValueSet ? ['System', 'Code', 'Preferred Term'] : ['Code', 'Preferred Term'];
+    const toRow = (c) => isValueSet ? [c.system, c.code, c.display] : [c.code, c.display];
+
+    const oldRows = [header, ...Object.values(oldConcepts).sort((a,b) => a.code.localeCompare(b.code)).map(toRow)];
+    const newRows = [header, ...Object.values(newConcepts).sort((a,b) => a.code.localeCompare(b.code)).map(toRow)];
+
+    const diffHeader = isValueSet ? ['Status', 'System', 'Code', 'Preferred Term'] : ['Status', 'Code', 'Preferred Term'];
+    const toDiffRow = (status, c) => isValueSet ? [status, c.system, c.code, c.display] : [status, c.code, c.display];
+
+    const diffRows = [
+      diffHeader,
+      ...addedKeys.map(k => toDiffRow('Added', newConcepts[k])),
+      ...deletedKeys.map(k => toDiffRow('Deleted', oldConcepts[k]))
+    ];
+
+    const oldBase = baseName(oldFile);
+    const newBase = baseName(newFile);
+
+    const dlOld = document.getElementById('dl-old');
+    const dlNew = document.getElementById('dl-new');
+    const dlDiff = document.getElementById('dl-diff');
+
+    dlOld.href = makeDownload(toCsv(oldRows));
+    dlOld.download = oldBase + '.csv';
+    document.getElementById('dl-old-name').textContent = oldBase + '.csv';
+
+    dlNew.href = makeDownload(toCsv(newRows));
+    dlNew.download = newBase + '.csv';
+    document.getElementById('dl-new-name').textContent = newBase + '.csv';
+
+    dlDiff.href = makeDownload(toCsv(diffRows));
+    dlDiff.download = oldBase + '_vs_' + newBase + '_DIFF.csv';
+    document.getElementById('dl-diff-name').textContent = 'DIFF.csv';
+
+    document.getElementById('stat-old').textContent = Object.keys(oldConcepts).length.toLocaleString();
+    document.getElementById('stat-added').textContent = addedKeys.length.toLocaleString();
+    document.getElementById('stat-deleted').textContent = deletedKeys.length.toLocaleString();
+
+    document.getElementById('results').classList.add('visible');
+  }
+
+  setupDrop('drop-old', 'input-old', 'label-old', 'type-old', 'old');
+  setupDrop('drop-new', 'input-new', 'label-new', 'type-new', 'new');
+</script>
+</body>
+</html>
