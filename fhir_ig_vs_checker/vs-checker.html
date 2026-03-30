@@ -356,7 +356,7 @@ const REGISTRIES = [
 // To add pre-configured servers, copy config.example.js to config.js and edit it.
 const ENVIRONMENTS = (window.VS_CHECKER_CONFIG && window.VS_CHECKER_CONFIG.environments)
   ? window.VS_CHECKER_CONFIG.environments
-  : [];
+  : [{ name: "tx.fhir.org", url: "https://tx.fhir.org/r4" }];
 
 // ============================================================
 // State
@@ -404,8 +404,13 @@ let runMeta          = { pkgName: '', pkgVersion: '', registry: '' };
 })();
 
 function handleEnvChange() {
-  const isOther = document.getElementById('tx-env').value === '__other__';
+  const val     = document.getElementById('tx-env').value;
+  const isOther = val === '__other__';
+  const env     = ENVIRONMENTS.find(e => e.url === val);
+  const hasConfigCreds = !isOther && env && (env.username || env.password);
+
   document.getElementById('custom-url-group').style.display          = isOther ? '' : 'none';
+  // Show manual auth fields only for "Other…"; configured envs use credentials from config.js
   document.getElementById('basic-auth-group').style.display          = isOther ? '' : 'none';
   document.getElementById('basic-auth-password-group').style.display = isOther ? '' : 'none';
   if (!isOther) {
@@ -509,11 +514,18 @@ async function handleRun() {
     ? document.getElementById('custom-url').value.trim().replace(/\/$/, '')
     : envVal;
   const txAuthHeader = (() => {
-    if (!isOther) return null;
-    const u = document.getElementById('auth-username').value;
-    const p = document.getElementById('auth-password').value;
-    if (!u && !p) return null;
-    return 'Basic ' + btoa(u + ':' + p);
+    if (isOther) {
+      const u = document.getElementById('auth-username').value;
+      const p = document.getElementById('auth-password').value;
+      if (!u && !p) return null;
+      return 'Basic ' + btoa(u + ':' + p);
+    }
+    // Use credentials from config.js if present for this environment
+    const env = ENVIRONMENTS.find(e => e.url === envVal);
+    if (env && (env.username || env.password)) {
+      return 'Basic ' + btoa((env.username || '') + ':' + (env.password || ''));
+    }
+    return null;
   })();
 
   if (!name || !version) {

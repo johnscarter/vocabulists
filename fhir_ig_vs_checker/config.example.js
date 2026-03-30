@@ -3,9 +3,13 @@
 //
 // If config.js is absent, the Terminology Server dropdown will show only "Other…",
 // which lets you type any server URL manually.
+//
+// username and password are optional. If omitted, requests are sent without authentication.
 
 window.VS_CHECKER_CONFIG = {
   environments: [
-    { name: "My Server", url: "https://your-terminology-server.example.org/fhir" }
+    { name: "tx.fhir.org", url: "https://tx.fhir.org/r4" },
+    { name: "My Server",   url: "https://your-terminology-server.example.org/fhir",
+                           username: "myuser", password: "mypassword" }
   ]
 };
