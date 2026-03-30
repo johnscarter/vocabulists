@@ -1,4 +1,6 @@
-# FHIR Diff Tool
+# CrossFire
+
+**Compare two versions of a FHIR CodeSystem or ValueSet**
 
 A single-page web tool for comparing two versions of a FHIR CodeSystem or ValueSet and downloading the results as spreadsheet-ready CSV files.
 
