@@ -16,7 +16,9 @@ Compares two versions of a FHIR CodeSystem or ValueSet exported as JSON, and gen
 
 The tool auto-detects whether the input files are CodeSystems or ValueSets. For ValueSets, the system URL is included in the output. Both files must be the same resource type.
 
-**Usage:** Open `fhir_diff.html` in a browser. Load the older and newer JSON files using the file slots (click or drag), then click Run Comparison. Download links for the three CSV files will appear once the comparison is complete.
+**Usage:** Open `fhir_diff/fhir_diff.html` in a browser. Load the older and newer JSON files using the file slots (click or drag), then click Run Comparison. Download links for the three CSV files will appear once the comparison is complete.
+
+Full instructions are available in `fhir_diff/fhir_diff_instructions.docx`.
 
 ## License
 
