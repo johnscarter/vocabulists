@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FHIR IG ValueSet Checker</title>
+  <script src="fflate.umd.js"></script>
+  <script src="config.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; color: #1a1a1a; background: #f0f2f5; min-height: 100vh; }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px 20px; }
+
+    h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: 20px; color: #111; }
+
+    .form-card {
+      background: white;
+      border-radius: 10px;
+      padding: 20px 24px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      margin-bottom: 16px;
+    }
+
+    .form-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group label { font-weight: 600; font-size: 12px; color: #555; text-transform: uppercase; letter-spacing: 0.04em; }
+    .form-group input, .form-group select {
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 7px;
+      font-size: 14px;
+      min-width: 200px;
+      background: white;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .form-group input:focus, .form-group select:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+    }
+
+    button {
+      padding: 9px 22px;
+      border: none;
+      border-radius: 7px;
+      font-size: 14px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .btn-primary { background: #2563eb; color: white; }
+    .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary { background: #e5e7eb; color: #374151; }
+    .btn-secondary:hover:not(:disabled) { background: #d1d5db; }
+    .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-danger { background: #dc2626; color: white; }
+    .btn-danger:hover { background: #b91c1c; }
+
+    .progress-section { margin-top: 16px; }
+    .progress-track {
+      background: #e5e7eb;
+      border-radius: 4px;
+      height: 7px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #3b82f6, #2563eb);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+    .progress-label { font-size: 12px; color: #6b7280; }
+
+    .msg {
+      padding: 11px 16px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .msg-error  { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; }
+    .msg-warn   { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+    .msg-info   { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
+    .msg-success{ background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+
+    .results-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .results-header h2 { font-size: 1rem; font-weight: 700; color: #374151; }
+
+    .card {
+      background: white;
+      border-radius: 9px;
+      padding: 14px 18px;
+      margin-bottom: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+      border-left: 4px solid #3b82f6;
+      transition: opacity 0.2s;
+    }
+    .card.not-found { border-left-color: #9ca3af; opacity: 0.65; }
+    .card.external  { border-left-color: #7c3aed; }
+    .card.srv-error { border-left-color: #dc2626; }
+
+    .card-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 3px; }
+    .card-title  { font-weight: 700; font-size: 0.95rem; }
+    .card-name   { color: #6b7280; font-size: 12px; font-family: monospace; }
+    .card-link   { color: #9ca3af; text-decoration: none; display: inline-flex; align-items: center; vertical-align: middle; }
+    .card-link:hover { color: #2563eb; }
+    .card-canonical { color: #9ca3af; font-size: 11px; font-family: monospace; word-break: break-all; }
+    .card-version { font-size: 11px; color: #9ca3af; white-space: nowrap; }
+    .card-desc   { color: #4b5563; font-size: 12px; margin: 5px 0 8px; line-height: 1.4; }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .b-ext        { background: #ede9fe; color: #6d28d9; }
+    .b-found      { background: #d1fae5; color: #065f46; }
+    .b-notfound   { background: #f3f4f6; color: #6b7280; }
+    .b-error      { background: #fee2e2; color: #991b1b; }
+    .b-checking   { background: #dbeafe; color: #1e40af; }
+    .b-inactive     { background: #fef3c7; color: #92400e; }
+    .b-noinactive   { background: #f0fdf4; color: #166534; }
+    .b-missing      { background: #fff1f2; color: #9f1239; }
+    .b-intensional  { background: #eff6ff; color: #1e40af; }
+    .b-extensional  { background: #fdf4ff; color: #7e22ce; }
+    .b-mixed        { background: #fff7ed; color: #c2410c; }
+
+    .compose-section { margin: 8px 0 4px; font-size: 12px; display: flex; flex-direction: column; gap: 5px; }
+    .compose-entry { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 5px; padding: 5px 10px; }
+    .compose-entry.is-exclude { background: #fef9f9; border-color: #fecaca; }
+    .compose-entry-header { font-weight: 600; color: #1e40af; margin-bottom: 2px; }
+    .compose-entry.is-exclude .compose-entry-header { color: #b91c1c; }
+    .compose-detail { padding-left: 10px; color: #374151; font-family: monospace; line-height: 1.5; }
+    .compose-more   { padding-left: 10px; color: #6b7280; font-style: italic; }
+
+    .cs-list { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 2px; }
+    .cs-chip {
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      color: #0369a1;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: monospace;
+    }
+
+    details.inactive { margin-top: 8px; }
+    details.inactive > summary {
+      cursor: pointer;
+      list-style: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #b45309;
+      user-select: none;
+      padding: 3px 0;
+    }
+    details.inactive > summary::before {
+      content: '▶';
+      font-size: 9px;
+      display: inline-block;
+      transition: transform 0.18s;
+    }
+    details[open].inactive > summary::before { transform: rotate(90deg); }
+
+    .inactive-table {
+      margin-top: 8px;
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .inactive-table th {
+      background: #fef3c7;
+      padding: 4px 10px;
+      text-align: left;
+      border: 1px solid #fde68a;
+      font-weight: 600;
+      color: #78350f;
+    }
+    .inactive-table td {
+      padding: 4px 10px;
+      border: 1px solid #fde68a;
+      font-family: monospace;
+    }
+    .inactive-table tr:nth-child(even) td { background: #fffbeb; }
+
+    .missing-table {
+      margin-top: 8px;
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .missing-table th {
+      background: #ffe4e6;
+      padding: 4px 10px;
+      text-align: left;
+      border: 1px solid #fecdd3;
+      font-weight: 600;
+      color: #9f1239;
+    }
+    .missing-table td {
+      padding: 4px 10px;
+      border: 1px solid #fecdd3;
+      font-family: monospace;
+    }
+    .missing-table tr:nth-child(even) td { background: #fff1f2; }
+
+    .inline-err {
+      display: inline-block;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #b91c1c;
+      border-radius: 5px;
+      padding: 3px 10px;
+      font-size: 11px;
+      margin-top: 6px;
+    }
+
+    .spinner {
+      width: 11px; height: 11px;
+      border: 2px solid #bfdbfe;
+      border-top-color: #2563eb;
+      border-radius: 50%;
+      animation: spin 0.65s linear infinite;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.45);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 200;
+    }
+    .modal-box {
+      background: white;
+      border-radius: 12px;
+      padding: 28px 28px 22px;
+      max-width: 400px; width: 90%;
+      box-shadow: 0 20px 48px rgba(0,0,0,0.25);
+    }
+    .modal-box h3 { font-size: 1.05rem; margin-bottom: 10px; }
+    .modal-box p  { color: #4b5563; font-size: 13px; line-height: 1.5; margin-bottom: 22px; }
+    .modal-btns   { display: flex; gap: 10px; justify-content: flex-end; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>HL7<sup>®</sup> FHIR<sup>®</sup> IG ValueSet Checker</h1>
+
+  <div class="form-card">
+    <div class="form-row">
+      <div class="form-group">
+        <label for="pkg-name">Package Name</label>
+        <input type="text" id="pkg-name" placeholder="e.g. ca.on.ehr.r4" title="You can find the package name and version info on the Releases tab of the associated Simplifier project page.">
+      </div>
+      <div class="form-group">
+        <label for="pkg-version">Version</label>
+        <input type="text" id="pkg-version" placeholder="e.g. 1.0.0-snapshot22" title="You can find the package name and version info on the Releases tab of the associated Simplifier project page.">
+      </div>
+      <div class="form-group">
+        <label for="pkg-registry">Package Registry</label>
+        <select id="pkg-registry"></select>
+      </div>
+      <div class="form-group">
+        <label for="tx-env">Terminology Server</label>
+        <select id="tx-env" onchange="handleEnvChange()"></select>
+      </div>
+      <div class="form-group" id="custom-url-group" style="display:none;">
+        <label for="custom-url">Custom URL</label>
+        <input type="url" id="custom-url" placeholder="https://example.org/fhir" style="min-width:280px;">
+      </div>
+      <div class="form-group" id="basic-auth-group" style="display:none;">
+        <label for="auth-username">Username</label>
+        <input type="text" id="auth-username" autocomplete="off" style="min-width:120px;">
+      </div>
+      <div class="form-group" id="basic-auth-password-group" style="display:none;">
+        <label for="auth-password">Password</label>
+        <input type="password" id="auth-password" autocomplete="off" style="min-width:120px;">
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-primary" id="run-btn" onclick="handleRun()">Run</button>
+        <button class="btn-secondary" id="export-btn" onclick="exportCSV()" disabled>Export CSV</button>
+      </div>
+    </div>
+    <div id="progress-section" class="progress-section" style="display:none;">
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+      </div>
+      <div class="progress-label" id="progress-label">Starting...</div>
+    </div>
+  </div>
+
+  <div id="messages"></div>
+
+  <div id="results-container" style="display:none;">
+    <div class="results-header">
+      <h2 id="results-title">Results</h2>
+    </div>
+    <div id="cards"></div>
+  </div>
+
+  <footer style="margin-top:40px;padding:16px 0 24px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;line-height:1.6;">
+    HL7, FHIR and the FHIR [FLAME DESIGN] are registered trademarks of Health Level Seven International
+    and their use does not constitute endorsement by HL7.
+    See <a href="https://hl7.org/fhir/license.html" target="_blank" rel="noopener noreferrer"
+       style="color:#9ca3af;">hl7.org/fhir/license.html</a> for further information.<br>
+    For information about this tool, contact John Carter at <a href="mailto:john.s.carter@gmail.com"
+       style="color:#9ca3af;">john.s.carter@gmail.com</a>.<br>
+    <span id="footer-version"></span>
+  </footer>
+</div>
+
+<!-- Change-while-running warning modal -->
+<div id="warn-modal" class="modal-backdrop" style="display:none;">
+  <div class="modal-box">
+    <h3>Processing in Progress</h3>
+    <p>Changing inputs while processing is running will cancel the current operation and clear all results. Continue?</p>
+    <div class="modal-btns">
+      <button class="btn-secondary" onclick="dismissWarn()">Go Back</button>
+      <button class="btn-danger" onclick="confirmReset()">Cancel &amp; Reset</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CONFIGURATION — edit to add/change environments and registries
+// ============================================================
+const VERSION    = '1.0.0';
+const BUILD_DATE = '2026-03-30';
+
+const REGISTRIES = [
+  { name: "Simplifier",       url: "https://packages.simplifier.net" },
+  { name: "HL7 FHIR Registry", url: "https://packages.fhir.org"      }
+];
+
+// Environments are loaded from config.js if present; otherwise only "Other…" is shown.
+// To add pre-configured servers, copy config.example.js to config.js and edit it.
+const ENVIRONMENTS = (window.VS_CHECKER_CONFIG && window.VS_CHECKER_CONFIG.environments)
+  ? window.VS_CHECKER_CONFIG.environments
+  : [];
+
+// ============================================================
+// State
+// ============================================================
+let isRunning        = false;
+let mainAbort        = null;   // AbortController for the whole run
+let results          = [];     // VS result objects, in order
+let warnPendingEvent = null;   // saved event target value to restore if user cancels
+let runMeta          = { pkgName: '', pkgVersion: '', registry: '' };
+
+// ============================================================
+// Boot
+// ============================================================
+(function boot() {
+  const reg = document.getElementById('pkg-registry');
+  REGISTRIES.forEach(r => {
+    const opt = document.createElement('option');
+    opt.value       = r.url;
+    opt.textContent = r.name;
+    reg.appendChild(opt);
+  });
+
+  const sel = document.getElementById('tx-env');
+  ENVIRONMENTS.forEach(env => {
+    const opt = document.createElement('option');
+    opt.value       = env.url;
+    opt.textContent = env.name;
+    sel.appendChild(opt);
+  });
+  const other = document.createElement('option');
+  other.value       = '__other__';
+  other.textContent = 'Other…';
+  sel.appendChild(other);
+
+  // Warn on input change while running
+  ['pkg-name', 'pkg-version'].forEach(id => {
+    document.getElementById(id).addEventListener('change', guardChange);
+  });
+  ['tx-env', 'pkg-registry', 'custom-url'].forEach(id => {
+    document.getElementById(id).addEventListener('change', guardChange);
+  });
+
+  document.getElementById('footer-version').textContent =
+    `Version ${VERSION} — built ${BUILD_DATE}.`;
+})();
+
+function handleEnvChange() {
+  const isOther = document.getElementById('tx-env').value === '__other__';
+  document.getElementById('custom-url-group').style.display          = isOther ? '' : 'none';
+  document.getElementById('basic-auth-group').style.display          = isOther ? '' : 'none';
+  document.getElementById('basic-auth-password-group').style.display = isOther ? '' : 'none';
+  if (!isOther) {
+    document.getElementById('auth-username').value = '';
+    document.getElementById('auth-password').value = '';
+  }
+}
+
+// ============================================================
+// Change guard
+// ============================================================
+function guardChange(e) {
+  if (!isRunning) return;
+  // Store the previous value so we can restore if user cancels
+  warnPendingEvent = e;
+  document.getElementById('warn-modal').style.display = 'flex';
+}
+
+function dismissWarn() {
+  document.getElementById('warn-modal').style.display = 'none';
+  // Restore old value (user chose to go back)
+  if (warnPendingEvent) {
+    warnPendingEvent.target.value = warnPendingEvent.target._prevValue || '';
+  }
+  warnPendingEvent = null;
+}
+
+function confirmReset() {
+  document.getElementById('warn-modal').style.display = 'none';
+  warnPendingEvent = null;
+  abortAndReset();
+}
+
+function abortAndReset() {
+  if (mainAbort) mainAbort.abort();
+  isRunning = false;
+  results   = [];
+  document.getElementById('run-btn').textContent  = 'Run';
+  document.getElementById('run-btn').className    = 'btn-primary';
+  document.getElementById('run-btn').disabled     = false;
+  document.getElementById('export-btn').disabled  = true;
+  document.getElementById('progress-section').style.display = 'none';
+  document.getElementById('results-container').style.display = 'none';
+  document.getElementById('cards').innerHTML = '';
+  clearMsgs();
+}
+
+// Save previous value for restore on cancel
+['pkg-name', 'pkg-version', 'pkg-registry', 'tx-env', 'custom-url'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('focus', () => { el._prevValue = el.value; });
+});
+
+// Quick-test shortcut: typing "xxx" in the package name field fills all inputs
+document.getElementById('pkg-name').addEventListener('input', function () {
+  if (this.value !== 'xxx') return;
+  this.value = 'fhir.org.nz.ig.base';
+  document.getElementById('pkg-version').value = '3.0.0';
+  const sel = document.getElementById('tx-env');
+  sel.value = '__other__';
+  document.getElementById('custom-url-group').style.display = '';
+  document.getElementById('custom-url').value = 'https://tx.fhirlab.net/fhir';
+});
+
+// ============================================================
+// Messages
+// ============================================================
+function clearMsgs() { document.getElementById('messages').innerHTML = ''; }
+
+function showMsg(type, html) {
+  const d = document.createElement('div');
+  d.className = `msg msg-${type}`;
+  d.innerHTML = html;
+  document.getElementById('messages').appendChild(d);
+  return d;
+}
+
+// ============================================================
+// Progress
+// ============================================================
+function setProg(pct, label) {
+  document.getElementById('progress-fill').style.width  = `${pct}%`;
+  document.getElementById('progress-label').textContent = label;
+}
+
+// ============================================================
+// Run button handler
+// ============================================================
+async function handleRun() {
+  if (isRunning) {
+    abortAndReset();
+    showMsg('warn', 'Processing cancelled.');
+    return;
+  }
+
+  const name    = document.getElementById('pkg-name').value.trim();
+  const version = document.getElementById('pkg-version').value.trim();
+  const envVal  = document.getElementById('tx-env').value;
+  const isOther = envVal === '__other__';
+  const txBase  = isOther
+    ? document.getElementById('custom-url').value.trim().replace(/\/$/, '')
+    : envVal;
+  const txAuthHeader = (() => {
+    if (!isOther) return null;
+    const u = document.getElementById('auth-username').value;
+    const p = document.getElementById('auth-password').value;
+    if (!u && !p) return null;
+    return 'Basic ' + btoa(u + ':' + p);
+  })();
+
+  if (!name || !version) {
+    showMsg('error', 'Please enter both a package name and version.');
+    return;
+  }
+  if (!txBase) {
+    showMsg('error', 'Please enter a terminology server URL.');
+    return;
+  }
+
+  clearMsgs();
+  results = [];
+  document.getElementById('cards').innerHTML = '';
+  document.getElementById('results-container').style.display = 'none';
+  document.getElementById('export-btn').disabled = true;
+
+  isRunning = true;
+  mainAbort = new AbortController();
+  document.getElementById('run-btn').textContent = 'Cancel';
+  document.getElementById('run-btn').className   = 'btn-danger';
+  document.getElementById('progress-section').style.display = 'block';
+
+  try {
+    await runAll(name, version, txBase, txAuthHeader);
+  } catch (e) {
+    if (e.name === 'AbortError') {
+      // already handled / user cancelled
+    } else {
+      showMsg('error', `Unexpected error: ${esc(e.message)}`);
+      console.error(e);
+    }
+  } finally {
+    isRunning = false;
+    mainAbort = null;
+    document.getElementById('run-btn').textContent = 'Run';
+    document.getElementById('run-btn').className   = 'btn-primary';
+    document.getElementById('run-btn').disabled    = false;
+  }
+}
+
+// ============================================================
+// TAR parser  (handles POSIX ustar)
+// ============================================================
+function parseTar(ab) {
+  const b = new Uint8Array(ab);
+  const files = {};
+
+  function str(off, len) {
+    let s = '';
+    for (let i = off; i < off + len && b[i] !== 0; i++) s += String.fromCharCode(b[i]);
+    return s;
+  }
+
+  let off = 0;
+  while (off + 512 <= b.length) {
+    const name = str(off, 100);
+    if (!name && b[off] === 0) break; // end-of-archive zero block
+
+    const size     = parseInt(str(off + 124, 12).trim(), 8) || 0;
+    const typeflag = String.fromCharCode(b[off + 156]);
+    const prefix   = str(off + 345, 155);
+    let   full     = (prefix ? prefix + '/' : '') + name;
+    full           = full.replace(/^\.\//, '');
+
+    off += 512;
+
+    if (typeflag === '0' || typeflag === '\0' || typeflag === '') {
+      files[full] = b.slice(off, off + size);
+    }
+
+    off += Math.ceil(size / 512) * 512;
+  }
+  return files;
+}
+
+// ============================================================
+// Fetch with per-request timeout, linked to mainAbort
+// ============================================================
+async function tFetch(url, opts = {}, ms = 30000) {
+  const ctrl = new AbortController();
+  const tid  = setTimeout(() => ctrl.abort('timeout'), ms);
+
+  // Propagate global cancel
+  const onAbort = () => ctrl.abort('main');
+  if (mainAbort) mainAbort.signal.addEventListener('abort', onAbort);
+
+  try {
+    const r = await fetch(url, { ...opts, signal: ctrl.signal });
+    clearTimeout(tid);
+    return r;
+  } catch (e) {
+    clearTimeout(tid);
+    // If global abort fired, re-throw as-is so caller can detect it
+    if (mainAbort && mainAbort.signal.aborted) throw e;
+    // Otherwise it's a timeout or network error; tag it
+    if (e.name === 'AbortError') {
+      const te = new Error(`Request timed out after ${ms / 1000}s`);
+      te.isTimeout = true;
+      throw te;
+    }
+    throw e;
+  } finally {
+    if (mainAbort) mainAbort.signal.removeEventListener('abort', onAbort);
+  }
+}
+
+function dec(u8) { return new TextDecoder().decode(u8); }
+
+// ============================================================
+// Core processing
+// ============================================================
+async function runAll(pkgName, pkgVersion, txBase, txAuthHeader) {
+  runMeta = { pkgName, pkgVersion, registry: document.getElementById('pkg-registry').value };
+
+  const txHeaders = txAuthHeader
+    ? { Accept: 'application/fhir+json', Authorization: txAuthHeader }
+    : { Accept: 'application/fhir+json' };
+
+  // ── 1. Download tgz ─────────────────────────────────────
+  setProg(3, `Downloading ${pkgName}@${pkgVersion}…`);
+  let tgzBuf;
+  try {
+    const registryBase = document.getElementById('pkg-registry').value;
+    const url  = `${registryBase}/${pkgName}/${pkgVersion}`;
+    const resp = await tFetch(url, {}, 90000);
+    if (!resp.ok) {
+      const msg = resp.status === 404
+        ? `Package <b>${esc(pkgName)}@${esc(pkgVersion)}</b> was not found on simplifier.net (404).`
+        : `Failed to download package: HTTP ${resp.status} ${esc(resp.statusText)}.`;
+      showMsg('error', msg);
+      setProg(0, '');
+      document.getElementById('progress-section').style.display = 'none';
+      return;
+    }
+    tgzBuf = await resp.arrayBuffer();
+  } catch (e) {
+    if (mainAbort && mainAbort.signal.aborted) throw e;
+    showMsg('error', `Network error downloading package: ${esc(e.message)}. Check your internet connection.`);
+    document.getElementById('progress-section').style.display = 'none';
+    return;
+  }
+
+  // ── 2. Unpack ────────────────────────────────────────────
+  setProg(12, 'Unpacking…');
+  let files;
+  try {
+    const tarBytes = fflate.gunzipSync(new Uint8Array(tgzBuf));
+    files = parseTar(tarBytes.buffer);
+  } catch (e) {
+    showMsg('error', `Failed to unpack package tgz: ${esc(e.message)}`);
+    document.getElementById('progress-section').style.display = 'none';
+    return;
+  }
+
+  // ── 3. Extract ValueSet files ────────────────────────────
+  setProg(18, 'Extracting ValueSet resources…');
+  const allKeys = Object.keys(files);
+
+  const vsFiles = allKeys.filter(f => {
+    const base = f.split('/').pop();
+    return base.startsWith('ValueSet-') && base.endsWith('.json');
+  });
+
+  if (vsFiles.length === 0) {
+    showMsg('warn', 'No <code>ValueSet-*.json</code> files found in this package.');
+    document.getElementById('progress-section').style.display = 'none';
+    return;
+  }
+
+  const vsMap = {}; // canonical → VS object
+  const pkgCanonicals = new Set();
+
+  for (const fname of vsFiles) {
+    let res;
+    try { res = JSON.parse(dec(files[fname])); }
+    catch (e) { showMsg('warn', `Skipping ${esc(fname)}: JSON parse error — ${esc(e.message)}`); continue; }
+    if (res.resourceType !== 'ValueSet' || !res.url) continue;
+
+    pkgCanonicals.add(res.url);
+    vsMap[res.url] = mkVS(res.url, {
+      name:     res.name        || '',
+      title:    res.title       || res.name || res.url,
+      desc:     res.description || '',
+      version:  res.version     || '',
+      external: false,
+      compose:  extractCompose(res.compose),
+    });
+  }
+
+  // ── 4. Scan StructureDefinitions for external VS refs ────
+  setProg(24, 'Scanning StructureDefinitions…');
+  const sdFiles = allKeys.filter(f => {
+    const base = f.split('/').pop();
+    return base.startsWith('StructureDefinition-') && base.endsWith('.json');
+  });
+
+  for (const fname of sdFiles) {
+    let res;
+    try { res = JSON.parse(dec(files[fname])); }
+    catch (e) { continue; }
+    if (res.resourceType !== 'StructureDefinition') continue;
+
+    const elems = (res.snapshot?.element) || (res.differential?.element) || [];
+    for (const el of elems) {
+      if (!el.binding?.valueSet) continue;
+      const canonical = el.binding.valueSet.split('|')[0].trim();
+      if (!canonical || pkgCanonicals.has(canonical) || vsMap[canonical]) continue;
+      vsMap[canonical] = mkVS(canonical, { external: true });
+    }
+  }
+
+  // ── 5. Show initial cards ────────────────────────────────
+  results = Object.values(vsMap);
+  document.getElementById('results-container').style.display = 'block';
+  document.getElementById('results-title').textContent = `Results (${results.length} ValueSets)`;
+  renderAll();
+
+  // ── 6. Query terminology server ──────────────────────────
+  let serverDead = false;
+
+  for (let i = 0; i < results.length; i++) {
+    if (mainAbort?.signal.aborted) break;
+    const vs = results[i];
+
+    if (serverDead) {
+      vs.serverError = true;
+      vs.errMsg      = 'Server unreachable (earlier failure)';
+      refreshCard(vs);
+      continue;
+    }
+
+    vs.processing = true;
+    refreshCard(vs);
+    setProg(28 + Math.round((i / results.length) * 67),
+            `Checking ${i + 1} / ${results.length}: ${vs.title}…`);
+
+    // ── 6a. Presence check ───────────────────────────────
+    try {
+      const r = await tFetch(
+        `${txBase}/ValueSet?url=${encodeURIComponent(vs.canonical)}`,
+        { headers: txHeaders },
+        15000
+      );
+      let bundle;
+      try   { bundle = await r.json(); }
+      catch { vs.found = false; vs.errMsg = 'Malformed JSON in presence response'; goto_next(vs); continue; }
+
+      const totalEntries = bundle.total ?? bundle.entry?.length ?? 0;
+      vs.found = totalEntries > 0;
+
+      // Populate metadata for external VSes from found resource
+      if (vs.external && vs.found && bundle.entry?.length > 0) {
+        const fv = bundle.entry[0].resource;
+        if (fv) {
+          if (!vs.name)  vs.name  = fv.name        || '';
+          if (!vs.title || vs.title === vs.canonical) vs.title = fv.title || fv.name || vs.canonical;
+          if (!vs.desc)  vs.desc  = fv.description  || '';
+          if (!vs.version) vs.version = fv.version  || '';
+          if (!vs.compose) vs.compose = extractCompose(fv.compose);
+        }
+      }
+    } catch (e) {
+      if (mainAbort?.signal.aborted) { vs.processing = false; refreshCard(vs); throw e; }
+      serverDead     = true;
+      vs.serverError = true;
+      vs.errMsg      = e.message;
+      vs.processing  = false;
+      refreshCard(vs);
+      showMsg('error',
+        `<b>Terminology server unreachable:</b> ${esc(e.message)}<br>` +
+        `Verify the server URL (<code>${esc(txBase)}</code>) and your network access. ` +
+        `Remaining ValueSets are marked as server error.`);
+      continue;
+    }
+
+    // ── 6b. Expand ───────────────────────────────────────
+    if (vs.found) {
+      try {
+        const r = await tFetch(
+          `${txBase}/ValueSet/$expand?url=${encodeURIComponent(vs.canonical)}&activeOnly=false`,
+          { headers: txHeaders },
+          30000
+        );
+        let exp;
+        try   { exp = await r.json(); }
+        catch { vs.errMsg = 'Malformed JSON in $expand response'; goto_next(vs); continue; }
+
+        if (exp.resourceType === 'OperationOutcome') {
+          const iss = exp.issue?.[0];
+          vs.errMsg = iss
+            ? `$expand error: ${iss.diagnostics || iss.details?.text || iss.code || 'OperationOutcome'}`
+            : '$expand returned an OperationOutcome';
+        } else if (exp.resourceType === 'ValueSet' && exp.expansion) {
+          const contains = exp.expansion.contains || [];
+
+          // Distinct system+version pairs.
+          // Servers typically report CS versions in expansion.parameter[name=version]
+          // as "http://system.url|version" rather than on each contains entry.
+          const csMap = new Map();
+          for (const p of (exp.expansion.parameter || [])) {
+            if (p.name !== 'version') continue;
+            const raw = p.valueUri || p.valueCanonical || p.valueString || '';
+            const sep = raw.lastIndexOf('|');
+            if (sep > 0) {
+              const system  = raw.substring(0, sep);
+              const version = raw.substring(sep + 1);
+              csMap.set(system, { system, version });
+            }
+          }
+          // Also walk contains[] to catch any systems not reported in parameters,
+          // and to pick up per-code versions when present.
+          for (const it of contains) {
+            if (!it.system) continue;
+            if (!csMap.has(it.system)) {
+              csMap.set(it.system, { system: it.system, version: it.version || '' });
+            } else if (!csMap.get(it.system).version && it.version) {
+              csMap.get(it.system).version = it.version;
+            }
+          }
+          vs.csSystems = [...csMap.values()];
+
+          // Inactive codes
+          vs.inactiveCodes = contains
+            .filter(it => it.inactive === true)
+            .map(it => ({ system: it.system || '', code: it.code || '', display: it.display || '' }));
+
+          // Missing codes — declared in extensional includes but absent from expansion
+          if (vs.compose && (vs.compose.overall === 'Extensional' || vs.compose.overall === 'Mixed')) {
+            const expandedKeys = new Set(
+              contains.map(it => `${it.system || ''}||${it.code || ''}`)
+            );
+            for (const inc of vs.compose.includes) {
+              if (inc.type !== 'extensional' || !inc.concepts.length) continue;
+              for (const c of inc.concepts) {
+                const key = `${inc.system || ''}||${c.code}`;
+                if (!expandedKeys.has(key)) {
+                  vs.missingCodes.push({ system: inc.system || '', code: c.code, display: c.display });
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        if (mainAbort?.signal.aborted) { vs.processing = false; refreshCard(vs); throw e; }
+        vs.errMsg = e.isTimeout ? '$expand timed out' : `$expand error: ${esc(e.message)}`;
+      }
+    }
+
+    goto_next(vs);
+  }
+
+  // ── 7. Finish ────────────────────────────────────────────
+  setProg(100, 'Done');
+  setTimeout(() => { document.getElementById('progress-section').style.display = 'none'; }, 1200);
+
+  const nFound    = results.filter(v => v.found === true).length;
+  const nMissing  = results.filter(v => v.found === false && !v.serverError).length;
+  const nSrvErr   = results.filter(v => v.serverError).length;
+  document.getElementById('results-title').textContent =
+    `Results — ${results.length} ValueSets · ${nFound} found · ${nMissing} not found` +
+    (nSrvErr ? ` · ${nSrvErr} server errors` : '');
+
+  if (results.length > 0) document.getElementById('export-btn').disabled = false;
+
+  if (!serverDead) {
+    showMsg('success',
+      `Done — ${results.length} ValueSets checked against <b>${esc(txBase)}</b>.`);
+  }
+
+  function goto_next(vs) { vs.processing = false; refreshCard(vs); }
+}
+
+// ============================================================
+// VS object factory
+// ============================================================
+function mkVS(canonical, opts = {}) {
+  return {
+    canonical,
+    name:         opts.name     || '',
+    title:        opts.title    || canonical,
+    desc:         opts.desc     || '',
+    version:      opts.version  || '',
+    external:     opts.external || false,
+    found:        null,
+    serverError:  false,
+    errMsg:       null,
+    csSystems:    [],
+    inactiveCodes:[],
+    missingCodes: [],
+    compose:      opts.compose || null,
+    processing:   false,
+  };
+}
+
+// ============================================================
+// Compose extraction & classification
+// ============================================================
+function extractCompose(compose) {
+  if (!compose) return null;
+
+  function parseEntries(arr) {
+    return (arr || []).map(inc => {
+      const hasConcepts = inc.concept?.length > 0;
+      const hasFilters  = inc.filter?.length  > 0;
+      // Extensional: explicit code list with no filters
+      // Intensional: filter-based, full-system import, or ValueSet reference
+      const type = hasConcepts && !hasFilters ? 'extensional' : 'intensional';
+      return {
+        type,
+        system:    inc.system   || null,
+        valueSets: inc.valueSet || [],
+        filters:   (inc.filter  || []).map(f => ({ property: f.property, op: f.op, value: f.value })),
+        concepts:  (inc.concept || []).map(c => ({ code: c.code, display: c.display || '' })),
+      };
+    });
+  }
+
+  const includes = parseEntries(compose.include);
+  const excludes = parseEntries(compose.exclude);
+  const all      = [...includes, ...excludes];
+
+  const hasI = all.some(e => e.type === 'intensional');
+  const hasE = all.some(e => e.type === 'extensional');
+  const overall = (hasI && hasE) ? 'Mixed' : hasI ? 'Intensional' : hasE ? 'Extensional' : null;
+
+  return { overall, includes, excludes };
+}
+
+// ============================================================
+// Card rendering
+// ============================================================
+function cid(vs) {
+  // Stable DOM id from canonical URL
+  return 'vs-' + hashStr(vs.canonical);
+}
+
+function hashStr(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+
+function renderAll() {
+  const c = document.getElementById('cards');
+  c.innerHTML = '';
+  for (const vs of results) c.appendChild(buildCard(vs));
+}
+
+function buildCard(vs) {
+  const el = document.createElement('div');
+  el.id        = cid(vs);
+  el.className = cardClass(vs);
+  el.innerHTML = cardInner(vs);
+  return el;
+}
+
+function refreshCard(vs) {
+  const el = document.getElementById(cid(vs));
+  if (!el) return;
+  el.className = cardClass(vs);
+  el.innerHTML = cardInner(vs);
+}
+
+function cardClass(vs) {
+  let c = 'card';
+  if (vs.serverError)          c += ' srv-error';
+  else if (vs.found === false) c += ' not-found';
+  if (vs.external)             c += ' external';
+  return c;
+}
+
+function renderCompose(compose) {
+  if (!compose) return '';
+
+  function renderEntry(entry, isExclude) {
+    const label = isExclude ? 'Exclude' : 'Include';
+    const parts = [];
+    if (entry.system)            parts.push(esc(entry.system));
+    entry.valueSets.forEach(v => parts.push('ValueSet ' + esc(v)));
+    const isFullImport = entry.type === 'intensional' && !entry.filters.length
+                         && !entry.concepts.length && !entry.valueSets.length && entry.system;
+    const headerLabel  = isFullImport ? `${label} all` : label;
+
+    let html = `<div class="compose-entry-header">${headerLabel}${parts.length ? ' &nbsp;<span style="font-weight:400;font-family:monospace;">' + parts.join(', ') + '</span>' : ''}</div>`;
+
+    for (const f of entry.filters) {
+      html += `<div class="compose-detail">where ${esc(f.property)} ${esc(f.op)} ${esc(f.value)}</div>`;
+    }
+
+    if (entry.concepts.length > 0) {
+      const shown = entry.concepts.slice(0, 5);
+      for (const c of shown) {
+        html += `<div class="compose-detail">${esc(c.code)}${c.display ? '  ' + esc(c.display) : ''}</div>`;
+      }
+      if (entry.concepts.length > 5) {
+        html += `<div class="compose-more">[+ ${entry.concepts.length - 5} more]</div>`;
+      }
+    }
+
+    return html;
+  }
+
+  let html = '<div class="compose-section">';
+  for (const inc of compose.includes) {
+    html += `<div class="compose-entry">${renderEntry(inc, false)}</div>`;
+  }
+  for (const exc of compose.excludes) {
+    html += `<div class="compose-entry is-exclude">${renderEntry(exc, true)}</div>`;
+  }
+  html += '</div>';
+  return html;
+}
+
+function cardInner(vs) {
+  // Badges
+  const badges = [];
+  if (vs.external)    badges.push(`<span class="badge b-ext">External</span>`);
+  if (vs.processing)  badges.push(`<span class="badge b-checking"><span class="spinner"></span>Checking…</span>`);
+  else if (vs.serverError) badges.push(`<span class="badge b-error" title="${esc(vs.errMsg || '')}">Server Error</span>`);
+  else if (vs.found === true)  badges.push(`<span class="badge b-found">Found</span>`);
+  else if (vs.found === false) badges.push(`<span class="badge b-notfound">Not Found</span>`);
+  if (!vs.processing && vs.found === true) {
+    if (vs.inactiveCodes.length > 0)
+      badges.push(`<span class="badge b-inactive">${vs.inactiveCodes.length} inactive code${vs.inactiveCodes.length !== 1 ? 's' : ''}</span>`);
+    else
+      badges.push(`<span class="badge b-noinactive">No inactive codes</span>`);
+    if (vs.missingCodes.length > 0)
+      badges.push(`<span class="badge b-missing">${vs.missingCodes.length} missing code${vs.missingCodes.length !== 1 ? 's' : ''}</span>`);
+  }
+  if (vs.compose?.overall) {
+    const cls = vs.compose.overall === 'Intensional' ? 'b-intensional'
+              : vs.compose.overall === 'Extensional' ? 'b-extensional'
+              : 'b-mixed';
+    badges.push(`<span class="badge ${cls}">${vs.compose.overall}</span>`);
+  }
+
+  // CS chips
+  let csHtml = '';
+  if (vs.csSystems.length > 0) {
+    csHtml = `<div class="cs-list">${
+      vs.csSystems.map(cs =>
+        `<span class="cs-chip" title="${esc(cs.version)}">${esc(cs.system)}${cs.version ? ' · ' + esc(fmtVersion(cs.version)) : ''}</span>`
+      ).join('')
+    }</div>`;
+  }
+
+  // Inactive codes
+  let inactHtml = '';
+  if (vs.inactiveCodes.length > 0) {
+    const rows = vs.inactiveCodes.map(ic =>
+      `<tr><td>${esc(ic.system)}</td><td>${esc(ic.code)}</td><td>${esc(ic.display)}</td></tr>`
+    ).join('');
+    inactHtml = `
+      <details class="inactive">
+        <summary>${vs.inactiveCodes.length} inactive code${vs.inactiveCodes.length !== 1 ? 's' : ''}</summary>
+        <table class="inactive-table">
+          <thead><tr><th>System</th><th>Code</th><th>Display</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </details>`;
+  }
+
+  // Missing codes
+  let missingHtml = '';
+  if (vs.missingCodes.length > 0) {
+    const rows = vs.missingCodes.map(mc =>
+      `<tr><td>${esc(mc.system)}</td><td>${esc(mc.code)}</td><td>${esc(mc.display)}</td></tr>`
+    ).join('');
+    missingHtml = `
+      <details class="inactive">
+        <summary style="color:#9f1239;">${vs.missingCodes.length} missing code${vs.missingCodes.length !== 1 ? 's' : ''} (declared but not in expansion)</summary>
+        <table class="missing-table">
+          <thead><tr><th>System</th><th>Code</th><th>Display</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </details>`;
+  }
+
+  // Inline error
+  let errHtml = '';
+  if (vs.errMsg && !vs.serverError) {
+    errHtml = `<div><span class="inline-err">${esc(vs.errMsg)}</span></div>`;
+  }
+
+  return `
+    <div class="card-header">
+      <span class="card-title">${esc(vs.title)}</span>
+      ${vs.name ? `<span class="card-name">${esc(vs.name)}</span>` : ''}
+      <a class="card-link" href="${esc(vsLinkUrl(vs))}" target="_blank" rel="noopener noreferrer" title="${esc(vsLinkTitle(vs))}"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
+      ${badges.join('')}
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:2px;">
+      <span class="card-canonical">${esc(vs.canonical)}</span>
+      ${vs.version ? `<span class="card-version">v${esc(vs.version)}</span>` : ''}
+    </div>
+    ${vs.desc ? `<div class="card-desc">${esc(vs.desc)}</div>` : ''}
+    ${errHtml}
+    ${renderCompose(vs.compose)}
+    ${csHtml}
+    ${missingHtml}
+    ${inactHtml}`;
+}
+
+// ============================================================
+// CSV export
+// ============================================================
+function exportCSV() {
+  const hdr = [
+    'vs_title','vs_name','vs_canonical_url','vs_version','external','present_on_server',
+    'cs_system','cs_version','inactive_code_system','inactive_code','inactive_code_display'
+  ];
+
+  const rows = [hdr];
+
+  for (const vs of results) {
+    const meta = [
+      vs.title,
+      vs.name,
+      vs.canonical,
+      vs.version,
+      vs.external ? 'true' : 'false',
+      vs.found === null ? '' : vs.found ? 'true' : 'false',
+    ];
+
+    if (!vs.found) {
+      // Not found or server error — one row, inactive columns empty
+      rows.push([...meta, '', '', '', '', '']);
+      continue;
+    }
+
+    if (vs.inactiveCodes.length === 0) {
+      // Found, no inactive codes — one row with NO_INACTIVE_CODES
+      const cs = vs.csSystems[0] || { system: '', version: '' };
+      rows.push([...meta, cs.system, cs.version, 'NO_INACTIVE_CODES', '', '']);
+      continue;
+    }
+
+    // One row per inactive code
+    for (const ic of vs.inactiveCodes) {
+      const cs = vs.csSystems.find(c => c.system === ic.system) || { system: ic.system, version: '' };
+      rows.push([...meta, cs.system, cs.version, ic.system, ic.code, ic.display]);
+    }
+  }
+
+  const csv = rows.map(r => r.map(cell => csvEsc(String(cell ?? ''))).join(',')).join('\r\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const a = Object.assign(document.createElement('a'), {
+    href:     URL.createObjectURL(blob),
+    download: 'vs-check-results.csv',
+  });
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function csvEsc(s) {
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+// ============================================================
+// HTML escape
+// ============================================================
+// Resolve the best link target for a VS card.
+// Internal VSes from Simplifier → simplifier.net/resolve with package scope.
+// Everything else → canonical URL.
+// ============================================================
+const SIMPLIFIER_REGISTRY = 'https://packages.simplifier.net';
+
+function vsLinkUrl(vs) {
+  if (!vs.external && runMeta.registry === SIMPLIFIER_REGISTRY) {
+    return 'https://simplifier.net/resolve?canonical=' + encodeURIComponent(vs.canonical)
+         + '&scope=' + encodeURIComponent(runMeta.pkgName) + '%40' + encodeURIComponent(runMeta.pkgVersion);
+  }
+  return vs.canonical;
+}
+
+function vsLinkTitle(vs) {
+  if (!vs.external && runMeta.registry === SIMPLIFIER_REGISTRY)
+    return 'Open on Simplifier: ' + vs.canonical;
+  if (vs.external)
+    return 'Open canonical URL: ' + vs.canonical;
+  return 'Open ValueSet page: ' + vs.canonical;
+}
+
+// ============================================================
+// If version is a URL (e.g. SNOMED's http://snomed.info/sct/{module}/version/{date}),
+// show only the last path segment; otherwise show as-is.
+function fmtVersion(v) {
+  if (!v) return '';
+  if (v.startsWith('http://') || v.startsWith('https://')) {
+    const seg = v.replace(/\/+$/, '').split('/').pop();
+    return 'v' + (seg || v);
+  }
+  return 'v' + v;
+}
+
+function esc(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</div>
+</body>
+</html>

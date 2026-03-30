@@ -1,0 +1,2 @@
+# Local configuration files — may contain server URLs or credentials
+fhir_ig_vs_checker/config.js
