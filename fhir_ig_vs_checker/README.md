@@ -54,51 +54,53 @@ This tool helps you answer questions like:
 
 ## Files
 
-The tool consists of two files that must be kept in the same folder:
-
 | File | Purpose |
 |---|---|
 | `vs-checker.html` | The application — open this in your browser |
 | `fflate.umd.js` | A local copy of the compression library used to unpack the IG package |
+| `config.example.js` | Template for adding your own terminology server environments |
+| `config.js` | Your local configuration — created by you, never shared (see below) |
 
-Do not move one file without the other.
+All files must be kept in the same folder. `config.js` is optional but recommended if you have private terminology servers to add.
 
 ---
 
-## Configuring environments and registries before first use
+## Configuring environments before first use
 
-Two arrays near the top of `vs-checker.html` control the dropdown options. Open the file in a text editor to edit them.
+Without any configuration, the **Terminology Server** dropdown contains one pre-configured option — the public `tx.fhir.org` server — plus an **Other…** option for typing in any URL manually.
 
-### Terminology server environments
+To add your own private or organisational terminology servers, create a `config.js` file:
 
-Find the `ENVIRONMENTS` block:
+1. Copy `config.example.js` to `config.js` (in the same folder).
+2. Open `config.js` in a text editor and edit the `environments` list.
 
 ```javascript
-const ENVIRONMENTS = [
-  { name: "DEV", url: "https://cdf.dev.ehealthontario.ca/ontosmile/fhir" },
-  { name: "DIT", url: "https://cdf.dit.ehealthontario.ca/ontosmile/fhir" },
-  { name: "QA",  url: "https://cdf.qa.ehealthontario.ca/ontosmile/fhir"  },
-  { name: "FAT", url: "https://cdf.fat.ehealthontario.ca/ontosmile/fhir" },
-  { name: "PST", url: "https://cdf.pst.ehealthontario.ca/ontosmile/fhir" }
-];
+window.VS_CHECKER_CONFIG = {
+  environments: [
+    { name: "tx.fhir.org", url: "https://tx.fhir.org/r4" },
+    { name: "My Server",   url: "https://your-server.example.org/fhir" }
+  ]
+};
 ```
 
-To add, remove, or rename an environment, edit this list following the same `{ name: "...", url: "..." }` pattern.
+Each entry requires a `name` (shown in the dropdown) and a `url` (the FHIR base URL of the server). Save the file and reload the page — your environments will appear in the dropdown.
+
+### Adding authentication credentials
+
+If a server requires Basic authentication, add `username` and `password` to its entry in `config.js`:
+
+```javascript
+{ name: "My Server", url: "https://your-server.example.org/fhir",
+                     username: "myuser", password: "mypassword" }
+```
+
+When a configured environment with credentials is selected, the tool sends them automatically. No username or password fields are shown on screen.
+
+> **Keep `config.js` private.** It is excluded from version control (listed in `.gitignore`) and should never be committed to a shared repository. Do not add credentials to `config.example.js`.
 
 ### Package registries
 
-Find the `REGISTRIES` block:
-
-```javascript
-const REGISTRIES = [
-  { name: "Simplifier",        url: "https://packages.simplifier.net" },
-  { name: "HL7 FHIR Registry", url: "https://packages.fhir.org"       }
-];
-```
-
-Edit this list in the same way if you need to add or change a registry.
-
-Save the file after any edits. The dropdowns will reflect your changes the next time you open or reload the page.
+The package registry dropdown is pre-configured with Simplifier and the HL7 FHIR Registry and does not need to be changed for typical use.
 
 ---
 
@@ -112,7 +114,7 @@ Save the file after any edits. The dropdowns will reflect your changes the next 
 
 4. **Package Registry** — select the registry to download the package from. Choose **Simplifier** for packages published on simplifier.net, or **HL7 FHIR Registry** for packages on packages.fhir.org.
 
-5. **Terminology Server** — select the environment to check against. To use a server not in the list, choose **Other…**, which reveals a **Custom URL** field, a **Username** field, and a **Password** field. Username and password are optional and support Basic authentication; they are never saved beyond the current browser session.
+5. **Terminology Server** — select the environment to check against. If you have configured environments in `config.js`, they appear here. To use a server not in the list, choose **Other…**, which reveals a **Custom URL** field and optional **Username** / **Password** fields for Basic authentication. Credentials entered manually are never saved beyond the current browser session.
 
 6. Click **Run**.
 
@@ -241,7 +243,7 @@ The tool could not reach the package registry. Check that your browser has inter
 The tool could not reach the selected terminology server. Common causes:
 
 - You are not connected to the network or VPN required to access that environment
-- The server URL in the `ENVIRONMENTS` list is incorrect or outdated
+- The server URL in `config.js` is incorrect or outdated
 - A custom URL was entered incorrectly
 - The server is down
 - The server does not allow CORS requests from a locally opened HTML file (some servers restrict this)
@@ -250,7 +252,10 @@ When this error occurs, all remaining ValueSets in the run are marked **Server E
 
 ### Unauthorized (401)
 
-If you are using a custom terminology server that requires authentication and your credentials are wrong or missing, the server will likely return a 401 response, which the tool will report as a server error. Re-enter the correct username and password in the **Other…** fields and re-run.
+If a terminology server requires authentication and the credentials are wrong or missing, the server will return a 401 response, which the tool reports as a server error.
+
+- For a server configured in `config.js` — check that the `username` and `password` values are correct and reload the page.
+- For **Other…** — re-enter the correct username and password and re-run.
 
 ### $expand error or OperationOutcome
 
